@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Barragem de Umari — Upanema/RN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+:root{
+  --ink:#12242B;
+  --ink-soft:#3C5158;
+  --reservoir:#1D5C77;
+  --reservoir-deep:#123B4D;
+  --reservoir-light:#4FA9C7;
+  --clay:#B5622A;
+  --clay-soft:#D98A54;
+  --gold:#D9A441;
+  --bg:#EEF2EF;
+  --panel:#FFFFFF;
+  --panel-soft:#F5F8F6;
+  --line:#D9E1DD;
+  --text:#12242B;
+  --text-soft:#5A6C70;
+  --shadow: 0 1px 2px rgba(18,36,43,0.06), 0 8px 24px -12px rgba(18,36,43,0.18);
+  --radius: 14px;
+  --ok:#2E8B57;
+  --warn:#C98A1E;
+}
+[data-theme="dark"]{
+  --bg:#0D1A1F;
+  --panel:#122229;
+  --panel-soft:#0F1D23;
+  --line:#213840;
+  --text:#E7EEEC;
+  --text-soft:#93A8AC;
+  --ink:#E7EEEC;
+  --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Inter',system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  transition:background .25s ease, color .25s ease;
+  min-height:100vh;
+}
+h1,h2,h3,h4{font-family:'Space Grotesk',sans-serif;letter-spacing:-0.01em;margin:0;color:var(--text);}
+.mono{font-family:'IBM Plex Mono',monospace;}
+a{color:inherit;}
+.wrap{max-width:1180px;margin:0 auto;padding:0 22px;}
+
+/* ---------- Header ---------- */
+header.top{
+  position:sticky;top:0;z-index:40;
+  background:var(--reservoir-deep);
+  color:#fff;
+  border-bottom:1px solid rgba(255,255,255,0.08);
+}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 0;gap:16px;}
+.brand{display:flex;align-items:center;gap:12px;}
+.brand svg{flex:none;}
+.brand .name{display:flex;flex-direction:column;line-height:1.15;}
+.brand .name b{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:600;}
+.brand .name span{font-size:12px;color:#A9C7D3;font-family:'IBM Plex Mono',monospace;letter-spacing:.02em;}
+nav.tabs{display:flex;gap:2px;overflow-x:auto;padding:0 0 0 0;scrollbar-width:none;}
+nav.tabs::-webkit-scrollbar{display:none;}
+nav.tabs button{
+  white-space:nowrap;
+  background:none;border:none;color:#BFD8E1;
+  font-family:'Inter',sans-serif;font-size:13.5px;font-weight:500;
+  padding:9px 13px;border-radius:8px;cursor:pointer;transition:all .15s ease;
+}
+nav.tabs button:hover{background:rgba(255,255,255,0.08);color:#fff;}
+nav.tabs button.active{background:var(--reservoir-light);color:#0D1F27;font-weight:600;}
+.theme-toggle{
+  background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.14);color:#fff;
+  border-radius:20px;padding:7px 12px;font-size:12.5px;cursor:pointer;display:flex;align-items:center;gap:6px;flex:none;
+}
+.subbar{background:var(--reservoir);color:#DCEEF3;font-size:12.5px;padding:6px 0;}
+.subbar .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;font-family:'IBM Plex Mono',monospace;}
+
+/* ---------- Layout helpers ---------- */
+.view{display:none;padding:34px 0 70px;}
+.view.active{display:block;}
+.grid{display:grid;gap:16px;}
+.grid.cols-4{grid-template-columns:repeat(4,1fr);}
+.grid.cols-3{grid-template-columns:repeat(3,1fr);}
+.grid.cols-2{grid-template-columns:repeat(2,1fr);}
+@media(max-width:900px){.grid.cols-4{grid-template-columns:repeat(2,1fr);}.grid.cols-3{grid-template-columns:repeat(2,1fr);}.grid.cols-2{grid-template-columns:1fr;}}
+@media(max-width:560px){.grid.cols-4{grid-template-columns:1fr;}}
+
+.card{
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:20px;box-shadow:var(--shadow);
+}
+.card h3{font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-soft);font-weight:600;margin-bottom:10px;}
+.stat{font-family:'IBM Plex Mono',monospace;font-size:30px;font-weight:600;color:var(--reservoir);}
+[data-theme="dark"] .stat{color:var(--reservoir-light);}
+.stat.unavailable{font-size:16px;color:var(--text-soft);font-weight:500;font-family:'Inter',sans-serif;}
+.stat-note{font-size:12px;color:var(--text-soft);margin-top:6px;}
+.badge{
+  display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;
+  padding:3px 9px;border-radius:20px;background:var(--panel-soft);color:var(--text-soft);border:1px solid var(--line);
+}
+.badge.dot::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--warn);}
+.section-title{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:8px;}
+.section-title h2{font-size:24px;}
+.section-title p{color:var(--text-soft);font-size:14px;margin:4px 0 0;}
+.eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--clay);font-weight:600;}
+
+/* ---------- Hero / gauge ---------- */
+.hero{display:grid;grid-template-columns:1.15fr 0.85fr;gap:26px;align-items:stretch;margin-bottom:26px;}
+@media(max-width:860px){.hero{grid-template-columns:1fr;}}
+.hero-copy{
+  background:linear-gradient(155deg,var(--reservoir-deep),var(--reservoir) 78%);
+  border-radius:20px;padding:34px 30px;color:#fff;display:flex;flex-direction:column;justify-content:center;position:relative;overflow:hidden;
+}
+.hero-copy::after{content:"";position:absolute;right:-60px;bottom:-60px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,0.10),transparent 70%);}
+.hero-copy .eyebrow{color:#9AD4E6;}
+.hero-copy h1{font-size:32px;color:#fff;margin:10px 0 6px;}
+.hero-copy p{color:#CFE6ED;font-size:14.5px;line-height:1.6;max-width:44ch;margin:0 0 18px;}
+.hero-copy .meta{display:flex;gap:18px;flex-wrap:wrap;font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:#BFDCE6;}
+.gauge-card{
+  background:var(--panel);border:1px solid var(--line);border-radius:20px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;box-shadow:var(--shadow);
+}
+.gauge-card h3{align-self:flex-start;}
+#gaugeSvg{width:150px;height:230px;}
+.gauge-readout{text-align:center;margin-top:10px;}
+.gauge-readout .pct{font-family:'IBM Plex Mono',monospace;font-size:15px;color:var(--text-soft);}
+
+/* ---------- table ---------- */
+table{width:100%;border-collapse:collapse;font-size:13.5px;}
+th{text-align:left;font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-soft);padding:9px 10px;border-bottom:1px solid var(--line);}
+td{padding:11px 10px;border-bottom:1px solid var(--line);}
+tr:last-child td{border-bottom:none;}
+.type-pill{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--panel-soft);border:1px solid var(--line);color:var(--text-soft);}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+.filters button{
+  border:1px solid var(--line);background:var(--panel);color:var(--text-soft);padding:7px 14px;border-radius:20px;font-size:13px;cursor:pointer;font-family:'Inter';
+}
+.filters button.active{background:var(--reservoir);color:#fff;border-color:var(--reservoir);}
+
+/* ---------- forecast ---------- */
+.forecast-row{display:flex;gap:12px;overflow-x:auto;padding-bottom:6px;}
+.fday{flex:none;width:110px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 12px;text-align:center;box-shadow:var(--shadow);}
+.fday .d{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--text-soft);text-transform:uppercase;}
+.fday .ic{margin:10px 0;color:var(--reservoir-light);}
+
+/* ---------- map ---------- */
+#map{height:480px;border-radius:16px;border:1px solid var(--line);}
+
+/* ---------- misc ---------- */
+.na{color:var(--text-soft);font-style:italic;}
+.btn{
+  background:var(--reservoir);color:#fff;border:none;padding:10px 18px;border-radius:10px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:'Inter';
+}
+.btn.secondary{background:var(--panel);color:var(--text);border:1px solid var(--line);}
+.btn.clay{background:var(--clay);}
+.chip-select{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;}
+.chip{border:1px solid var(--line);padding:8px 13px;border-radius:20px;font-size:13px;cursor:pointer;background:var(--panel);}
+.chip.selected{background:var(--gold);border-color:var(--gold);color:#2A2007;font-weight:600;}
+.source-row{display:flex;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--line);font-size:14px;gap:12px;flex-wrap:wrap;}
+.source-row:last-child{border-bottom:none;}
+.source-row .name{font-weight:600;}
+.source-row .meta{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text-soft);}
+label.small{font-size:12.5px;color:var(--text-soft);display:block;margin:12px 0 5px;}
+input,select{
+  width:100%;padding:9px 11px;border-radius:8px;border:1px solid var(--line);background:var(--panel-soft);color:var(--text);font-family:'Inter';font-size:13.5px;
+}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px;}
+@media(max-width:600px){.form-grid{grid-template-columns:1fr;}}
+.admin-locked{text-align:center;padding:60px 20px;max-width:360px;margin:0 auto;}
+footer{border-top:1px solid var(--line);padding:26px 0;text-align:center;color:var(--text-soft);font-size:12.5px;}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:10px;font-size:13.5px;opacity:0;pointer-events:none;transition:opacity .25s ease, transform .25s ease;z-index:100;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(-6px);}
+.leg{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--text-soft);margin-top:10px;}
+.leg span{display:inline-flex;align-items:center;gap:6px;}
+.leg i{width:10px;height:10px;border-radius:50%;display:inline-block;}
+</style>
+</head>
+<body data-theme="light">
+
+<header class="top">
+  <div class="wrap topbar">
+    <div class="brand">
+      <svg width="34" height="34" viewBox="0 0 40 40" fill="none">
+        <path d="M20 3C20 3 8 16.5 8 25.5C8 32.4 13.4 37 20 37C26.6 37 32 32.4 32 25.5C32 16.5 20 3 20 3Z" fill="#4FA9C7" stroke="#DCEEF3" stroke-width="1.4"/>
+        <path d="M12 24C14.5 27 17 25 20 27C23 29 25.5 27 28 24" stroke="#0D1F27" stroke-width="1.3" fill="none" stroke-linecap="round"/>
+      </svg>
+      <div class="name"><b>Barragem de Umari</b><span>UPANEMA · RN</span></div>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button data-view="inicio" class="active">Início</button>
+      <button data-view="tempo">Previsão do Tempo</button>
+      <button data-view="chuvas">Monitoramento de Chuvas</button>
+      <button data-view="mapa">Mapa</button>
+      <button data-view="comparacao">Comparação</button>
+      <button data-view="sobre">Sobre</button>
+      <button data-view="fontes">Fontes</button>
+      <button data-view="admin">Painel Admin</button>
+    </nav>
+    <button class="theme-toggle" id="themeToggle">🌙 Escuro</button>
+  </div>
+  <div class="subbar"><div class="wrap"><span id="clock">—</span><span>Painel independente de monitoramento · não é canal oficial</span></div></div>
+</header>
+
+<!-- ===================== INÍCIO ===================== -->
+<section class="view active" id="view-inicio">
+  <div class="wrap">
+    <div class="hero">
+      <div class="hero-copy">
+        <span class="eyebrow">Reservatório · Semiárido Potiguar</span>
+        <h1>Situação hídrica da Barragem de Umari</h1>
+        <p>Painel de acompanhamento do reservatório de Umari e das chuvas na região de Upanema/RN, preparado para receber dados oficiais em tempo real.</p>
+        <div class="meta">
+          <span>📍 Upanema — RN</span>
+          <span id="lastUpdateMeta">🕒 Última atualização: dados não disponíveis</span>
+        </div>
+      </div>
+      <div class="gauge-card">
+        <h3>Nível do reservatório</h3>
+        <svg id="gaugeSvg" viewBox="0 0 150 230">
+          <rect x="55" y="14" width="40" height="180" rx="6" fill="none" stroke="var(--line)" stroke-width="2"/>
+          <g id="ticks" font-family="IBM Plex Mono" font-size="8" fill="var(--text-soft)"></g>
+          <rect id="gaugeFill" x="57" y="192" width="36" height="0" fill="url(#waterGrad)"/>
+          <defs>
+            <linearGradient id="waterGrad" x1="0" y1="1" x2="0" y2="0">
+              <stop offset="0%" stop-color="#123B4D"/>
+              <stop offset="100%" stop-color="#4FA9C7"/>
+            </linearGradient>
+          </defs>
+          <rect x="55" y="14" width="40" height="180" rx="6" fill="none" stroke="var(--ink-soft)" stroke-width="1.5" opacity="0.35"/>
+        </svg>
+        <div class="gauge-readout">
+          <div class="stat unavailable">Dados não disponíveis</div>
+          <div class="pct">estrutura pronta para % em tempo real</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title"><h2>Indicadores do reservatório</h2><p>Todos os campos abaixo aguardam integração com fonte oficial de dados</p></div>
+    <div class="grid cols-4" style="margin-bottom:26px;">
+      <div class="card"><h3>Capacidade total</h3><div class="stat unavailable">Dados não disponíveis</div><div class="stat-note">m³ — a preencher via fonte oficial</div></div>
+      <div class="card"><h3>Volume atual</h3><div class="stat unavailable">Dados não disponíveis</div><div class="stat-note">m³</div></div>
+      <div class="card"><h3>% da capacidade</h3><div class="stat unavailable">Dados não disponíveis</div><div class="stat-note">calculado automaticamente quando houver dado</div></div>
+      <div class="card"><h3>Sangria</h3><div class="stat unavailable">Não aplicável no momento</div><div class="stat-note">exibido quando o reservatório atingir a cota de sangria</div></div>
+    </div>
+
+    <div class="grid cols-2" style="align-items:start;">
+      <div class="card">
+        <h3>Evolução do volume armazenado</h3>
+        <canvas id="volumeChart" height="220"></canvas>
+        <p class="na" style="margin-top:10px;font-size:12.5px;">Sem série histórica cadastrada. Insira medições pelo Painel Admin para o gráfico ser preenchido.</p>
+      </div>
+      <div class="card">
+        <h3>Variação recente</h3>
+        <table>
+          <tr><td>Últimas 24h</td><td style="text-align:right" class="na">Dados não disponíveis</td></tr>
+          <tr><td>Últimos 7 dias</td><td style="text-align:right" class="na">Dados não disponíveis</td></tr>
+          <tr><td>Últimos 30 dias</td><td style="text-align:right" class="na">Dados não disponíveis</td></tr>
+          <tr><td>Ano corrente</td><td style="text-align:right" class="na">Dados não disponíveis</td></tr>
+        </table>
+        <p style="font-size:12.5px;color:var(--text-soft);margin-top:12px;">Fonte: <span class="na">a definir</span> · Registrado automaticamente a cada nova medição, sem sobrescrever o histórico.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== PREVISÃO DO TEMPO ===================== -->
+<section class="view" id="view-tempo">
+  <div class="wrap">
+    <div class="section-title"><h2>Previsão do tempo — Upanema/RN</h2><p>Estrutura pronta para consumir uma API meteorológica (ex.: OpenWeatherMap, WeatherAPI ou Open-Meteo)</p></div>
+    <div class="grid cols-4" style="margin-bottom:24px;">
+      <div class="card"><h3>Condição atual</h3><div class="stat unavailable">Dados não disponíveis</div></div>
+      <div class="card"><h3>Temperatura / sensação</h3><div class="stat unavailable">Dados não disponíveis</div></div>
+      <div class="card"><h3>Umidade</h3><div class="stat unavailable">Dados não disponíveis</div></div>
+      <div class="card"><h3>Vento</h3><div class="stat unavailable">Dados não disponíveis</div></div>
+    </div>
+    <div class="grid cols-2" style="margin-bottom:24px;">
+      <div class="card"><h3>Probabilidade de chuva hoje</h3><div class="stat unavailable">Dados não disponíveis</div></div>
+      <div class="card"><h3>Precipitação prevista (mm)</h3><div class="stat unavailable">Dados não disponíveis</div></div>
+    </div>
+    <div class="card" style="margin-bottom:24px;">
+      <h3>Próximos 7 dias</h3>
+      <div class="forecast-row" id="forecastRow"></div>
+    </div>
+    <div class="card">
+      <h3>Previsão por hora</h3>
+      <p class="na">Disponível assim que a API meteorológica for conectada (dado horário depende do provedor escolhido).</p>
+    </div>
+    <p style="font-size:12.5px;color:var(--text-soft);margin-top:14px;">🕒 Última atualização: <span class="na">dados não disponíveis</span> · A chave de API deve ficar em variável de ambiente, nunca exposta no código público.</p>
+  </div>
+</section>
+
+<!-- ===================== MONITORAMENTO DE CHUVAS ===================== -->
+<section class="view" id="view-chuvas">
+  <div class="wrap">
+    <div class="section-title"><h2>Monitoramento de chuvas</h2><p>Zona urbana, comunidades rurais, assentamentos, sítios e demais localidades cadastradas</p></div>
+    <div class="filters" id="rainFilters">
+      <button class="active" data-f="hoje">Hoje</button>
+      <button data-f="7d">Últimos 7 dias</button>
+      <button data-f="30d">Últimos 30 dias</button>
+      <button data-f="mes">Mês atual</button>
+      <button data-f="ano">Ano atual</button>
+    </div>
+    <div class="card">
+      <table id="rainTable">
+        <thead><tr><th>Localidade</th><th>Tipo</th><th>Chuva do dia</th><th>24h</th><th>Semana</th><th>Mês</th><th>Ano</th><th>Última medição</th><th>Fonte</th></tr></thead>
+        <tbody id="rainTbody"></tbody>
+      </table>
+    </div>
+    <p style="font-size:12.5px;color:var(--text-soft);margin-top:12px;">Cadastre localidades e insira medições pelo Painel Admin. Nenhum valor de chuva é estimado — cada célula exibe "Dados não disponíveis" até a inserção real.</p>
+  </div>
+</section>
+
+<!-- ===================== MAPA ===================== -->
+<section class="view" id="view-mapa">
+  <div class="wrap">
+    <div class="section-title"><h2>Mapa da região</h2><p>Barragem, sede do município, comunidades e pontos de medição de chuva</p></div>
+    <div id="map"></div>
+    <div class="leg">
+      <span><i style="background:#1D5C77"></i> Barragem de Umari</span>
+      <span><i style="background:#B5622A"></i> Sede do município</span>
+      <span><i style="background:#D9A441"></i> Localidade cadastrada</span>
+    </div>
+    <p style="font-size:12.5px;color:var(--text-soft);margin-top:10px;">A posição da barragem é aproximada (baseada nas coordenadas do município de Upanema) até a confirmação de coordenadas oficiais. Ajuste em Painel Admin → Localidades.</p>
+  </div>
+</section>
+
+<!-- ===================== COMPARAÇÃO ===================== -->
+<section class="view" id="view-comparacao">
+  <div class="wrap">
+    <div class="section-title"><h2>Comparar localidades</h2><p>Selecione duas ou mais localidades para comparar a chuva registrada</p></div>
+    <div class="chip-select" id="compareChips"></div>
+    <button class="btn" id="compareBtn">Comparar</button>
+    <div class="card" style="margin-top:20px;">
+      <canvas id="compareChart" height="220"></canvas>
+      <table style="margin-top:16px;" id="compareTable"></table>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== SOBRE ===================== -->
+<section class="view" id="view-sobre">
+  <div class="wrap" style="max-width:760px;">
+    <div class="section-title"><h2>Sobre a Barragem de Umari</h2></div>
+    <div class="card" style="line-height:1.75;font-size:15px;">
+      <p>A Barragem de Umari é um reservatório localizado no semiárido do Rio Grande do Norte, no município de Upanema, na mesorregião Oeste Potiguar. Junto com o açude Santa Cruz, integra o sistema de reservatórios que abastece a região e sustenta atividades como agricultura, pesca e psicultura.</p>
+      <p>Estudos morfométricos caracterizam o reservatório de Umari como relativamente raso em relação ao seu perímetro, o que favorece a entrada de luz e a produtividade biológica, mas também deixa o açude mais sujeito à ressuspensão de sedimentos em dias de vento forte.</p>
+      <p><strong>Importância para a região:</strong> em áreas de clima semiárido como Upanema, marcadas por chuvas irregulares e estações secas prolongadas, reservatórios como o de Umari são essenciais para garantir água durante os períodos de estiagem, tanto para consumo quanto para a produção rural.</p>
+      <p><strong>Como funciona este monitoramento:</strong> este painel foi estruturado para consumir dados oficiais de volume e cota do reservatório, dados meteorológicos de uma API confiável e registros de chuva enviados por responsáveis locais em cada comunidade. Enquanto uma fonte oficial não está integrada, os campos permanecem marcados como "Dados não disponíveis" — nenhum número é inventado.</p>
+      <p><strong>Como são coletados os dados de chuva:</strong> a estrutura prevê pluviômetros comunitários, com um responsável cadastrado por localidade, que registra as leituras através do Painel Admin.</p>
+      <p style="font-size:12.5px;color:var(--text-soft);">Referência morfométrica: MOURA, R.S.T. et al. "Parâmetros morfométricos dos reservatórios Santa Cruz e Umari, semiárido do Rio Grande do Norte, Brasil". Boletim do Instituto de Pesca, v.41, n.2, 2018 (levantamento batimétrico de dez/2012).</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== FONTES ===================== -->
+<section class="view" id="view-fontes">
+  <div class="wrap" style="max-width:760px;">
+    <div class="section-title"><h2>Fontes e transparência</h2><p>Toda informação exibida no painel deve indicar sua origem e data de atualização</p></div>
+    <div class="card">
+      <div class="source-row"><div><div class="name">Volume e cota do reservatório</div><div class="meta">Aguardando integração — sugestão: ANA / SEMARH-RN / IGARN</div></div><span class="badge dot">pendente</span></div>
+      <div class="source-row"><div><div class="name">Dados meteorológicos</div><div class="meta">Aguardando integração — sugestão: INMET, Open-Meteo ou OpenWeatherMap</div></div><span class="badge dot">pendente</span></div>
+      <div class="source-row"><div><div class="name">Chuva por localidade</div><div class="meta">Inserção manual por responsável cadastrado, via Painel Admin</div></div><span class="badge dot">manual</span></div>
+      <div class="source-row"><div><div class="name">Coordenadas geográficas</div><div class="meta">Upanema (sede) — Wikipédia/IBGE · Barragem — aproximada, a confirmar</div></div><span class="badge">parcial</span></div>
+    </div>
+    <p style="font-size:12.5px;color:var(--text-soft);margin-top:14px;">Este painel não é um canal oficial da Prefeitura de Upanema, da ANA ou de qualquer órgão público — é uma ferramenta independente de acompanhamento, construída para ser alimentada por fontes oficiais assim que disponíveis.</p>
+  </div>
+</section>
+
+<!-- ===================== ADMIN ===================== -->
+<section class="view" id="view-admin">
+  <div class="wrap">
+    <div id="adminLocked" class="admin-locked">
+      <h2>Painel administrativo</h2>
+      <p style="color:var(--text-soft);font-size:14px;margin:10px 0 18px;">Acesso restrito. Esta é uma demonstração de interface — a autenticação real deve ser implementada no back-end (ex.: sessão + hash de senha, nunca senha fixa no front-end).</p>
+      <label class="small">Senha de demonstração: <b>umari-admin</b></label>
+      <input type="password" id="adminPass" placeholder="Senha">
+      <button class="btn" style="margin-top:12px;width:100%;" id="adminLoginBtn">Entrar</button>
+    </div>
+    <div id="adminPanel" style="display:none;">
+      <div class="section-title"><h2>Painel administrativo</h2><button class="btn secondary" id="adminLogout">Sair</button></div>
+      <div class="grid cols-2" style="align-items:start;">
+        <div class="card">
+          <h3>Cadastrar localidade</h3>
+          <div class="form-grid">
+            <div><label class="small">Nome</label><input id="locName" placeholder="Ex.: Sítio Bom Jardim"></div>
+            <div><label class="small">Tipo</label>
+              <select id="locType">
+                <option>Zona urbana</option><option>Comunidade rural</option><option>Projeto de assentamento</option><option>Sítio</option><option>Outra localidade</option>
+              </select>
+            </div>
+            <div><label class="small">Latitude</label><input id="locLat" placeholder="-5.64"></div>
+            <div><label class="small">Longitude</label><input id="locLng" placeholder="-37.25"></div>
+            <div style="grid-column:1/-1;"><label class="small">Responsável pelo pluviômetro</label><input id="locResp" placeholder="Nome do responsável"></div>
+          </div>
+          <button class="btn" style="margin-top:14px;" id="addLocBtn">Adicionar localidade</button>
+        </div>
+        <div class="card">
+          <h3>Registrar chuva</h3>
+          <label class="small">Localidade</label>
+          <select id="rainLoc"></select>
+          <div class="form-grid">
+            <div><label class="small">Chuva do dia (mm)</label><input id="rainDay" type="number" step="0.1"></div>
+            <div><label class="small">Acumulado 24h (mm)</label><input id="rain24" type="number" step="0.1"></div>
+            <div><label class="small">Acumulado semana (mm)</label><input id="rainWeek" type="number" step="0.1"></div>
+            <div><label class="small">Acumulado mês (mm)</label><input id="rainMonth" type="number" step="0.1"></div>
+            <div><label class="small">Acumulado ano (mm)</label><input id="rainYear" type="number" step="0.1"></div>
+            <div><label class="small">Fonte</label><input id="rainSource" placeholder="Ex.: pluviômetro comunitário"></div>
+          </div>
+          <button class="btn clay" style="margin-top:14px;" id="addRainBtn">Salvar leitura</button>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px;">
+        <h3>Dados do reservatório</h3>
+        <div class="form-grid">
+          <div><label class="small">Capacidade total (m³)</label><input id="damCap" type="number"></div>
+          <div><label class="small">Volume atual (m³)</label><input id="damVol" type="number"></div>
+          <div><label class="small">Fonte</label><input id="damSource" placeholder="Ex.: ANA / SEMARH-RN"></div>
+          <div><label class="small">&nbsp;</label><button class="btn" id="saveDamBtn">Salvar medição</button></div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px;">
+        <h3>Localidades cadastradas</h3>
+        <table id="adminLocTable"><thead><tr><th>Nome</th><th>Tipo</th><th>Responsável</th><th>Última leitura</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">Painel independente de monitoramento hídrico e meteorológico · Upanema/RN — não vinculado a órgão público ou municipal · dados exibidos apenas quando confirmados por fonte real</div>
+</footer>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------------- Tabs ---------------- */
+const tabs = document.getElementById('tabs');
+tabs.addEventListener('click', e=>{
+  const btn = e.target.closest('button'); if(!btn) return;
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+btn.dataset.view).classList.add('active');
+  if(btn.dataset.view==='mapa') setTimeout(()=>{ if(window._map) window._map.invalidateSize(); },50);
+});
+
+/* ---------------- Theme ---------------- */
+const themeBtn = document.getElementById('themeToggle');
+themeBtn.addEventListener('click', ()=>{
+  const body=document.body;
+  const next = body.getAttribute('data-theme')==='light' ? 'dark':'light';
+  body.setAttribute('data-theme', next);
+  themeBtn.textContent = next==='light' ? '🌙 Escuro' : '☀️ Claro';
+});
+
+/* ---------------- Clock ---------------- */
+function tickClock(){
+  const now = new Date();
+  document.getElementById('clock').textContent = 'Horário local: ' + now.toLocaleString('pt-BR', {dateStyle:'short', timeStyle:'short'});
+}
+tickClock(); setInterval(tickClock, 30000);
+
+/* ---------------- Toast ---------------- */
+function toast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+/* ---------------- Gauge (no data state) ---------------- */
+const ticksG = document.getElementById('ticks');
+for(let i=0;i<=6;i++){
+  const y = 14 + i*30;
+  const val = 100 - i*(100/6);
+  ticksG.innerHTML += `<text x="48" y="${y+3}" text-anchor="end">${val.toFixed(0)}%</text><line x1="52" y1="${y}" x2="55" y2="${y}" stroke="var(--text-soft)"/>`;
+}
+document.getElementById('gaugeFill').setAttribute('height', 0); // no data yet
+
+/* ---------------- Volume chart (empty state) ---------------- */
+const volCtx = document.getElementById('volumeChart');
+let volumeChart = new Chart(volCtx, {
+  type:'line',
+  data:{ labels:[], datasets:[{ label:'Volume (m³)', data:[], borderColor:'#1D5C77', backgroundColor:'rgba(29,92,119,0.12)', fill:true, tension:.3 }] },
+  options:{ responsive:true, plugins:{legend:{display:false}}, scales:{ x:{display:true}, y:{display:true} } }
+});
+
+/* ---------------- Forecast (placeholder 7 days) ---------------- */
+const forecastRow = document.getElementById('forecastRow');
+const days = ['Hoje','Amanhã','+2','+3','+4','+5','+6'];
+forecastRow.innerHTML = days.map(d=>`
+  <div class="fday">
+    <div class="d">${d}</div>
+    <div class="ic">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="5" stroke="currentColor" stroke-width="1.5"/></svg>
+    </div>
+    <div class="na" style="font-size:12px;">sem dados</div>
+  </div>`).join('');
+
+/* ---------------- Data model (in-memory, backed by persistent storage) ---------------- */
+let localities = [];
+let rainData = {};   // localityId -> {day,h24,week,month,year,lastUpdate,source}
+let damData = null;  // {capacity,volume,source,lastUpdate,history:[]}
+
+async function loadAll(){
+  try{
+    const locRes = await window.storage.get('localities', true);
+    localities = locRes ? JSON.parse(locRes.value) : [];
+  }catch(e){ localities = []; }
+  try{
+    const rainRes = await window.storage.get('rain-data', true);
+    rainData = rainRes ? JSON.parse(rainRes.value) : {};
+  }catch(e){ rainData = {}; }
+  try{
+    const damRes = await window.storage.get('dam-data', true);
+    damData = damRes ? JSON.parse(damRes.value) : null;
+  }catch(e){ damData = null; }
+  renderAll();
+}
+
+async function saveLocalities(){ try{ await window.storage.set('localities', JSON.stringify(localities), true); }catch(e){ toast('Falha ao salvar localidades'); } }
+async function saveRain(){ try{ await window.storage.set('rain-data', JSON.stringify(rainData), true); }catch(e){ toast('Falha ao salvar chuva'); } }
+async function saveDam(){ try{ await window.storage.set('dam-data', JSON.stringify(damData), true); }catch(e){ toast('Falha ao salvar dados da barragem'); } }
+
+function fmt(v, unit=''){ return (v===undefined||v===null||v==='') ? '<span class="na">Dados não disponíveis</span>' : (v+unit); }
+
+function renderAll(){
+  renderRainTable();
+  renderMap();
+  renderCompareChips();
+  renderAdminLocTable();
+  renderRainLocSelect();
+  renderDamCards();
+}
+
+/* ---- Rain table ---- */
+function renderRainTable(){
+  const tbody = document.getElementById('rainTbody');
+  if(localities.length===0){
+    tbody.innerHTML = `<tr><td colspan="9" class="na" style="text-align:center;padding:26px;">Nenhuma localidade cadastrada ainda. Adicione pelo Painel Admin.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = localities.map(l=>{
+    const r = rainData[l.id] || {};
+    return `<tr>
+      <td><b>${l.name}</b></td>
+      <td><span class="type-pill">${l.type}</span></td>
+      <td>${fmt(r.day,' mm')}</td>
+      <td>${fmt(r.h24,' mm')}</td>
+      <td>${fmt(r.week,' mm')}</td>
+      <td>${fmt(r.month,' mm')}</td>
+      <td>${fmt(r.year,' mm')}</td>
+      <td>${fmt(r.lastUpdate)}</td>
+      <td>${fmt(r.source)}</td>
+    </tr>`;
+  }).join('');
+}
+document.getElementById('rainFilters').addEventListener('click', e=>{
+  const btn = e.target.closest('button'); if(!btn) return;
+  document.querySelectorAll('#rainFilters button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderRainTable(); // filter is structural; values already reflect the selected accumulation period once data exists
+});
+
+/* ---- Dam cards / gauge / chart ---- */
+function renderDamCards(){
+  const cards = document.querySelectorAll('#view-inicio .grid.cols-4 .card');
+  if(!damData){ return; }
+  const pct = damData.capacity ? Math.min(100, (damData.volume/damData.capacity*100)) : null;
+  cards[0].querySelector('.stat').outerHTML = `<div class="stat mono">${Number(damData.capacity).toLocaleString('pt-BR')} m³</div>`;
+  cards[1].querySelector('.stat').outerHTML = `<div class="stat mono">${Number(damData.volume).toLocaleString('pt-BR')} m³</div>`;
+  if(pct!==null){
+    cards[2].querySelector('.stat').outerHTML = `<div class="stat mono">${pct.toFixed(1)}%</div>`;
+    const fillH = 180*(pct/100);
+    document.getElementById('gaugeFill').setAttribute('height', fillH);
+    document.getElementById('gaugeFill').setAttribute('y', 194-fillH);
+    document.querySelector('.gauge-readout .stat').outerHTML = `<div class="stat mono" style="font-size:24px;">${pct.toFixed(1)}%</div>`;
+  }
+  document.getElementById('lastUpdateMeta').textContent = '🕒 Última atualização: ' + (damData.lastUpdate || 'dados não disponíveis');
+  if(damData.history && damData.history.length){
+    volumeChart.data.labels = damData.history.map(h=>h.date);
+    volumeChart.data.datasets[0].data = damData.history.map(h=>h.volume);
+    volumeChart.update();
+  }
+}
+
+/* ---- Map ---- */
+function renderMap(){
+  if(!window._map){
+    window._map = L.map('map').setView([-5.64194,-37.2578], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution:'&copy; OpenStreetMap contributors', maxZoom:18 }).addTo(window._map);
+    window._markersLayer = L.layerGroup().addTo(window._map);
+    const damIcon = L.divIcon({className:'', html:'<div style="width:16px;height:16px;border-radius:50%;background:#1D5C77;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>'});
+    const cityIcon = L.divIcon({className:'', html:'<div style="width:14px;height:14px;border-radius:50%;background:#B5622A;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>'});
+    L.marker([-5.6470,-37.2650], {icon:damIcon}).addTo(window._map).bindPopup('<b>Barragem de Umari</b><br>Coordenadas aproximadas — a confirmar<br>Volume: <span style="color:#888">dados não disponíveis</span>');
+    L.marker([-5.64194,-37.2578], {icon:cityIcon}).addTo(window._map).bindPopup('<b>Upanema — sede municipal</b>');
+  }
+  window._markersLayer.clearLayers();
+  const locIcon = L.divIcon({className:'', html:'<div style="width:12px;height:12px;border-radius:50%;background:#D9A441;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>'});
+  localities.forEach(l=>{
+    if(l.lat && l.lng){
+      const r = rainData[l.id] || {};
+      L.marker([parseFloat(l.lat), parseFloat(l.lng)], {icon:locIcon}).addTo(window._markersLayer)
+        .bindPopup(`<b>${l.name}</b><br>Hoje: ${r.day ? r.day+' mm':'dados não disponíveis'}<br>Semana: ${r.week? r.week+' mm':'dados não disponíveis'}<br>Mês: ${r.month? r.month+' mm':'dados não disponíveis'}<br>Última atualização: ${r.lastUpdate||'—'}`);
+    }
+  });
+}
+
+/* ---- Compare ---- */
+let selectedCompare = [];
+function renderCompareChips(){
+  const box = document.getElementById('compareChips');
+  if(localities.length===0){ box.innerHTML = '<p class="na">Cadastre localidades no Painel Admin para habilitar a comparação.</p>'; return; }
+  box.innerHTML = localities.map(l=>`<button class="chip ${selectedCompare.includes(l.id)?'selected':''}" data-id="${l.id}">${l.name}</button>`).join('');
+  box.querySelectorAll('.chip').forEach(c=>c.addEventListener('click', ()=>{
+    const id=c.dataset.id;
+    selectedCompare = selectedCompare.includes(id) ? selectedCompare.filter(x=>x!==id) : [...selectedCompare, id];
+    renderCompareChips();
+  }));
+}
+let compareChart = new Chart(document.getElementById('compareChart'), {
+  type:'bar', data:{labels:[],datasets:[{label:'Chuva acumulada (mm)',data:[],backgroundColor:'#4FA9C7'}]},
+  options:{responsive:true, plugins:{legend:{display:false}}}
+});
+document.getElementById('compareBtn').addEventListener('click', ()=>{
+  if(selectedCompare.length<2){ toast('Selecione ao menos duas localidades'); return; }
+  const labels = selectedCompare.map(id=>localities.find(l=>l.id===id).name);
+  const values = selectedCompare.map(id=>{
+    const r = rainData[id]; return r && r.month!==undefined && r.month!=='' ? Number(r.month) : 0;
+  });
+  compareChart.data.labels = labels;
+  compareChart.data.datasets[0].data = values;
+  compareChart.update();
+  const tbl = document.getElementById('compareTable');
+  tbl.innerHTML = '<tr><th>Localidade</th><th>Chuva no mês</th></tr>' + selectedCompare.map(id=>{
+    const r = rainData[id]||{};
+    return `<tr><td>${localities.find(l=>l.id===id).name}</td><td>${fmt(r.month,' mm')}</td></tr>`;
+  }).join('');
+});
+
+/* ---- Admin ---- */
+document.getElementById('adminLoginBtn').addEventListener('click', ()=>{
+  if(document.getElementById('adminPass').value === 'umari-admin'){
+    document.getElementById('adminLocked').style.display='none';
+    document.getElementById('adminPanel').style.display='block';
+  } else { toast('Senha incorreta'); }
+});
+document.getElementById('adminLogout').addEventListener('click', ()=>{
+  document.getElementById('adminPanel').style.display='none';
+  document.getElementById('adminLocked').style.display='block';
+  document.getElementById('adminPass').value='';
+});
+
+document.getElementById('addLocBtn').addEventListener('click', async ()=>{
+  const name = document.getElementById('locName').value.trim();
+  if(!name){ toast('Informe o nome da localidade'); return; }
+  const loc = {
+    id: 'loc_'+Date.now(),
+    name, type: document.getElementById('locType').value,
+    lat: document.getElementById('locLat').value, lng: document.getElementById('locLng').value,
+    responsible: document.getElementById('locResp').value
+  };
+  localities.push(loc);
+  await saveLocalities();
+  ['locName','locLat','locLng','locResp'].forEach(id=>document.getElementById(id).value='');
+  renderAll();
+  toast('Localidade adicionada');
+});
+
+function renderRainLocSelect(){
+  const sel = document.getElementById('rainLoc');
+  sel.innerHTML = localities.map(l=>`<option value="${l.id}">${l.name}</option>`).join('') || '<option disabled>Cadastre uma localidade primeiro</option>';
+}
+
+document.getElementById('addRainBtn').addEventListener('click', async ()=>{
+  const id = document.getElementById('rainLoc').value;
+  if(!id){ toast('Cadastre uma localidade primeiro'); return; }
+  rainData[id] = {
+    day: document.getElementById('rainDay').value, h24: document.getElementById('rain24').value,
+    week: document.getElementById('rainWeek').value, month: document.getElementById('rainMonth').value,
+    year: document.getElementById('rainYear').value, source: document.getElementById('rainSource').value || 'pluviômetro comunitário',
+    lastUpdate: new Date().toLocaleString('pt-BR', {dateStyle:'short', timeStyle:'short'})
+  };
+  await saveRain();
+  ['rainDay','rain24','rainWeek','rainMonth','rainYear','rainSource'].forEach(i=>document.getElementById(i).value='');
+  renderAll();
+  toast('Leitura registrada');
+});
+
+document.getElementById('saveDamBtn').addEventListener('click', async ()=>{
+  const cap = document.getElementById('damCap').value, vol = document.getElementById('damVol').value;
+  if(!cap || !vol){ toast('Preencha capacidade e volume'); return; }
+  const dateStr = new Date().toLocaleString('pt-BR', {dateStyle:'short', timeStyle:'short'});
+  if(!damData) damData = {history:[]};
+  damData.capacity = cap; damData.volume = vol; damData.source = document.getElementById('damSource').value || 'inserção manual';
+  damData.lastUpdate = dateStr;
+  damData.history = damData.history || [];
+  damData.history.push({date: new Date().toLocaleDateString('pt-BR'), volume: Number(vol)});
+  await saveDam();
+  ['damCap','damVol','damSource'].forEach(i=>document.getElementById(i).value='');
+  renderAll();
+  toast('Medição da barragem salva');
+});
+
+function renderAdminLocTable(){
+  const tbody = document.querySelector('#adminLocTable tbody');
+  tbody.innerHTML = localities.map(l=>{
+    const r = rainData[l.id]||{};
+    return `<tr><td>${l.name}</td><td>${l.type}</td><td>${l.responsible||'—'}</td><td>${r.lastUpdate||'—'}</td></tr>`;
+  }).join('') || '<tr><td colspan="4" class="na">Nenhuma localidade cadastrada</td></tr>';
+}
+
+loadAll();
+</script>
+</body>
+</html>
